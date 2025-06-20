@@ -9,6 +9,8 @@ from typing import Dict, Any, Optional, List, Tuple
 from collections import deque
 import random
 
+from utils.device_utils import get_device
+
 
 class BaseAgent(ABC):
     """
@@ -31,10 +33,9 @@ class BaseAgent(ABC):
         self.action_dim = action_dim
         self.config = config
         
-        # Set device
-        self.device = config.get('device', 'cpu')
-        if self.device == 'auto':
-            self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        # Set device using device utilities
+        device_name = config.get('device', 'auto')
+        self.device = get_device(device_name)
         
         # Set random seed
         self.seed = config.get('seed', 42)
@@ -207,7 +208,7 @@ class BaseAgent(ABC):
         episode_length = 0
         
         while True:
-            # Select action (no exploration during evaluation)
+            # Select action
             action = self.select_action(state)
             
             # Take step in environment
@@ -232,7 +233,7 @@ class BaseAgent(ABC):
         Get training statistics.
         
         Returns:
-            Dictionary with training statistics
+            Dictionary containing training statistics
         """
         if not self.episode_rewards:
             return {
@@ -240,22 +241,18 @@ class BaseAgent(ABC):
                 'total_steps': 0,
                 'average_reward': 0.0,
                 'average_length': 0.0,
-                'success_rate': 0.0
+                'best_reward': 0.0,
+                'recent_average_reward': 0.0
             }
-        
-        # Calculate success rate (episodes lasting > 195 steps for CartPole)
-        successful_episodes = sum(1 for length in self.episode_lengths if length >= 195)
-        success_rate = successful_episodes / len(self.episode_lengths)
         
         return {
             'episode_count': self.episode_count,
             'total_steps': self.total_steps,
             'average_reward': np.mean(self.episode_rewards),
             'average_length': np.mean(self.episode_lengths),
-            'success_rate': success_rate,
+            'best_reward': np.max(self.episode_rewards),
             'recent_average_reward': np.mean(self.episode_rewards[-100:]) if len(self.episode_rewards) >= 100 else np.mean(self.episode_rewards),
-            'best_reward': max(self.episode_rewards),
-            'worst_reward': min(self.episode_rewards)
+            'device': str(self.device)
         }
     
     def save_model(self, filepath: str):
@@ -278,7 +275,7 @@ class BaseAgent(ABC):
     
     def get_action_distribution(self, state: np.ndarray) -> np.ndarray:
         """
-        Get the action distribution for a given state.
+        Get action probabilities for a given state.
         
         Args:
             state: Current state
@@ -301,10 +298,10 @@ class BaseAgent(ABC):
         raise NotImplementedError("Subclasses must implement get_value_estimate")
     
     def reset_training_stats(self):
-        """Reset training statistics."""
+        """Reset all training statistics."""
+        self.episode_count = 0
+        self.total_steps = 0
         self.episode_rewards = []
         self.episode_lengths = []
         self.training_losses = []
-        self.evaluation_results = []
-        self.episode_count = 0
-        self.total_steps = 0 
+        self.evaluation_results = [] 

@@ -19,6 +19,7 @@ from config.environment_config import EnvironmentConfig, CartPoleConfig
 from config.training_config import TrainingConfig, ComparisonConfig
 from environments.cartpole_env import create_cartpole_env
 from agents.dqn_agent import create_dqn_agent
+from utils.device_utils import print_device_info, get_global_device
 
 
 def train_dqn_agent(episodes: int = 1000, eval_frequency: int = 50, 
@@ -35,6 +36,9 @@ def train_dqn_agent(episodes: int = 1000, eval_frequency: int = 50,
     print("=" * 60)
     print("TRAINING DQN AGENT")
     print("=" * 60)
+    
+    # Show device information
+    print_device_info()
     
     # Create environment
     env = create_cartpole_env(normalize_states=True, reward_shaping=False)
@@ -60,17 +64,21 @@ def train_dqn_agent(episodes: int = 1000, eval_frequency: int = 50,
     agent.train(env, episodes=episodes, eval_frequency=eval_frequency)
     
     # Print final statistics
-    stats = agent.get_training_info()
+    stats = agent.get_training_stats()
     print("\n" + "=" * 60)
     print("TRAINING COMPLETE")
     print("=" * 60)
     print(f"Episodes: {stats['episode_count']}")
     print(f"Total Steps: {stats['total_steps']}")
     print(f"Average Reward: {stats['average_reward']:.2f}")
-    print(f"Success Rate: {stats['success_rate']:.2%}")
     print(f"Best Reward: {stats['best_reward']:.2f}")
     print(f"Recent Average Reward: {stats['recent_average_reward']:.2f}")
-    print(f"Final Epsilon: {stats['epsilon']:.3f}")
+    print(f"Device Used: {stats['device']}")
+    
+    # Get training info for additional details
+    training_info = agent.get_training_info()
+    print(f"Final Epsilon: {training_info['epsilon']:.3f}")
+    print(f"Replay Buffer Size: {training_info['replay_buffer_size']}")
     
     # Save model if requested
     if save_model:
@@ -126,6 +134,9 @@ def compare_agents(episodes: int = 500, num_runs: int = 3):
     print("COMPARING AGENTS")
     print("=" * 60)
     
+    # Show device information
+    print_device_info()
+    
     results = {
         'dqn': [],
         'active_inference': []
@@ -149,19 +160,21 @@ def compare_agents(episodes: int = 500, num_runs: int = 3):
     
     if results['dqn']:
         dqn_rewards = [stats['average_reward'] for stats in results['dqn']]
-        dqn_success_rates = [stats['success_rate'] for stats in results['dqn']]
+        dqn_best_rewards = [stats['best_reward'] for stats in results['dqn']]
         
         print(f"DQN Agent:")
         print(f"  Average Reward: {sum(dqn_rewards)/len(dqn_rewards):.2f} ± {np.std(dqn_rewards):.2f}")
-        print(f"  Success Rate: {sum(dqn_success_rates)/len(dqn_success_rates):.2%} ± {np.std(dqn_success_rates):.2%}")
+        print(f"  Best Reward: {sum(dqn_best_rewards)/len(dqn_best_rewards):.2f} ± {np.std(dqn_best_rewards):.2f}")
+        print(f"  Device: {results['dqn'][0]['device']}")
     
     if results['active_inference']:
         ai_rewards = [stats['average_reward'] for stats in results['active_inference']]
-        ai_success_rates = [stats['success_rate'] for stats in results['active_inference']]
+        ai_best_rewards = [stats['best_reward'] for stats in results['active_inference']]
         
         print(f"Active Inference Agent:")
         print(f"  Average Reward: {sum(ai_rewards)/len(ai_rewards):.2f} ± {np.std(ai_rewards):.2f}")
-        print(f"  Success Rate: {sum(ai_success_rates)/len(ai_success_rates):.2%} ± {np.std(ai_success_rates):.2%}")
+        print(f"  Best Reward: {sum(ai_best_rewards)/len(ai_best_rewards):.2f} ± {np.std(ai_best_rewards):.2f}")
+        print(f"  Device: {results['active_inference'][0]['device']}")
     
     return results
 
@@ -202,7 +215,8 @@ def main():
     
     parser.add_argument(
         '--model_path', 
-        type=str,
+        type=str, 
+        default=None,
         help='Path to save/load the model'
     )
     
@@ -219,67 +233,38 @@ def main():
         help='Number of runs for comparison'
     )
     
-    parser.add_argument(
-        '--test', 
-        action='store_true',
-        help='Run setup tests'
-    )
-    
     args = parser.parse_args()
     
-    # Run setup tests if requested
-    if args.test:
-        print("Running setup tests...")
-        import test_setup
-        success = test_setup.main()
-        if not success:
-            print("Setup tests failed. Please fix the issues before proceeding.")
-            return
+    # Show device information at startup
+    print("=" * 60)
+    print("ACTIVE INFERENCE AGENT PROJECT")
+    print("=" * 60)
+    print_device_info()
     
-    # Create data directories
-    os.makedirs('data/logs', exist_ok=True)
-    os.makedirs('data/models', exist_ok=True)
-    os.makedirs('data/results', exist_ok=True)
-    
-    # Run training based on arguments
     if args.compare:
+        # Compare agents
         compare_agents(episodes=args.episodes, num_runs=args.num_runs)
-    
     elif args.agent == 'dqn':
+        # Train DQN agent
         train_dqn_agent(
             episodes=args.episodes,
             eval_frequency=args.eval_frequency,
             save_model=args.save_model,
             model_path=args.model_path
         )
-    
     elif args.agent == 'active_inference':
+        # Train Active Inference agent
         train_active_inference_agent(
             episodes=args.episodes,
             eval_frequency=args.eval_frequency,
             save_model=args.save_model,
             model_path=args.model_path
         )
-    
     elif args.agent == 'both':
+        # Train both agents
         print("Training both agents...")
-        dqn_agent, dqn_stats = train_dqn_agent(
-            episodes=args.episodes,
-            eval_frequency=args.eval_frequency,
-            save_model=args.save_model,
-            model_path=args.model_path
-        )
-        
-        ai_agent, ai_stats = train_active_inference_agent(
-            episodes=args.episodes,
-            eval_frequency=args.eval_frequency,
-            save_model=args.save_model,
-            model_path=args.model_path
-        )
-    
-    else:
-        print(f"Unknown agent type: {args.agent}")
-        parser.print_help()
+        train_dqn_agent(episodes=args.episodes, eval_frequency=args.eval_frequency)
+        train_active_inference_agent(episodes=args.episodes, eval_frequency=args.eval_frequency)
 
 
 if __name__ == "__main__":
