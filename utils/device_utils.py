@@ -5,6 +5,7 @@ Handles automatic device selection for CPU, GPU (CUDA), and Apple Silicon (MPS).
 
 import torch
 from typing import Optional, Union, Any
+import warnings
 
 
 def get_device(device_name: Optional[str] = None) -> torch.device:
@@ -30,7 +31,7 @@ def get_device(device_name: Optional[str] = None) -> torch.device:
         elif device_name == 'mps' and torch.backends.mps.is_available():
             return torch.device('mps')
         else:
-            print(f"Warning: Requested device '{device_name}' not available, falling back to best available device")
+            warnings.warn(f"Requested device '{device_name}' not available, falling back to best available device")
     
     # Auto-select best available device
     if torch.cuda.is_available():
@@ -129,6 +130,26 @@ def create_tensor_on_device(*args, device: torch.device, **kwargs) -> torch.Tens
         torch.Tensor: Tensor created on the specified device
     """
     return torch.tensor(*args, device=device, **kwargs)
+
+
+def safe_tensor_creation(data, device: torch.device, dtype=None) -> torch.Tensor:
+    """
+    Safely create a tensor from various input types, avoiding warnings.
+    
+    Args:
+        data: Input data (numpy array, list, tensor, etc.)
+        device: Target device
+        dtype: Optional data type
+        
+    Returns:
+        torch.Tensor: Tensor on the specified device
+    """
+    if isinstance(data, torch.Tensor):
+        # If already a tensor, move to device
+        return data.to(device, dtype=dtype, non_blocking=True)
+    else:
+        # Create new tensor on device
+        return torch.tensor(data, device=device, dtype=dtype)
 
 
 def get_device_memory_info(device: torch.device) -> dict:

@@ -4,6 +4,7 @@ Metrics utilities for the Active Inference Agent project.
 
 import numpy as np
 from typing import List, Dict, Any, Tuple
+import torch
 
 
 def compute_success_rate(episode_lengths: List[int], threshold: int = 195) -> float:
@@ -214,3 +215,65 @@ def compare_agents(agent_results: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
                                          key=lambda x: x[1], reverse=True)
     
     return comparison 
+
+
+def compute_performance_metrics(episode_rewards: List[float], 
+                               episode_lengths: List[int],
+                               training_losses: List[float] = None,
+                               belief_entropies: List[float] = None,
+                               free_energies: List[float] = None) -> Dict[str, Any]:
+    """
+    Compute comprehensive performance metrics for an agent.
+    
+    Args:
+        episode_rewards: List of episode rewards
+        episode_lengths: List of episode lengths
+        training_losses: List of training losses (optional)
+        belief_entropies: List of belief entropies (optional)
+        free_energies: List of free energies (optional)
+        
+    Returns:
+        Dictionary containing comprehensive performance metrics
+    """
+    # Basic agent statistics
+    basic_stats = compute_agent_statistics(episode_rewards, episode_lengths, training_losses)
+    
+    # Convergence metrics
+    convergence_metrics = compute_convergence_metrics(episode_rewards)
+    
+    # Uncertainty metrics
+    uncertainty_metrics = compute_uncertainty_metrics(belief_entropies, free_energies)
+    
+    # Combine all metrics
+    performance_metrics = {
+        **basic_stats,
+        **convergence_metrics,
+        **uncertainty_metrics
+    }
+    
+    # Additional performance indicators
+    if episode_rewards:
+        # Learning efficiency
+        performance_metrics['learning_efficiency'] = basic_stats['recent_average_reward'] / basic_stats['average_reward'] if basic_stats['average_reward'] > 0 else 0
+        
+        # Stability (coefficient of variation)
+        performance_metrics['reward_stability'] = basic_stats['std_reward'] / basic_stats['average_reward'] if basic_stats['average_reward'] > 0 else float('inf')
+        
+        # Performance trend (comparing first and last 100 episodes)
+        if len(episode_rewards) >= 200:
+            first_100 = episode_rewards[:100]
+            last_100 = episode_rewards[-100:]
+            performance_metrics['performance_improvement'] = np.mean(last_100) - np.mean(first_100)
+        else:
+            performance_metrics['performance_improvement'] = 0
+    
+    return performance_metrics 
+
+
+def batch_cov_trace(cov_batch):
+    """Compute the trace of each covariance matrix in a batch."""
+    return cov_batch.diagonal(dim1=-2, dim2=-1).sum(-1)
+
+def batch_cov_det(cov_batch):
+    """Compute the determinant of each covariance matrix in a batch."""
+    return torch.det(cov_batch) 

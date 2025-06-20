@@ -162,4 +162,30 @@ def plot_agent_comparison(agent_results: Dict[str, List[float]],
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
     
+    plt.show()
+
+
+def plot_belief_covariance_evolution(stats, save_path=None):
+    """Plot the evolution of belief covariance trace and determinant over time."""
+    cov_trace = stats.get('cov_trace_history', None)
+    cov_det = stats.get('cov_det_history', None)
+    if cov_trace is None or cov_det is None:
+        print("[WARNING] No covariance trace/det history found in stats.")
+        return
+    plt.figure(figsize=(12, 5))
+    plt.subplot(1, 2, 1)
+    plt.plot(cov_trace, label='Covariance Trace')
+    plt.xlabel('Step')
+    plt.ylabel('Trace')
+    plt.title('Belief Covariance Trace Evolution')
+    plt.legend()
+    plt.subplot(1, 2, 2)
+    plt.plot(cov_det, label='Covariance Determinant')
+    plt.xlabel('Step')
+    plt.ylabel('Determinant')
+    plt.title('Belief Covariance Determinant Evolution')
+    plt.legend()
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path)
     plt.show() 

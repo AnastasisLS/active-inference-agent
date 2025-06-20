@@ -324,4 +324,119 @@ def create_training_summary_plot(agent_results: Dict[str, Dict[str, Any]],
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
     
-    plt.show() 
+    plt.show()
+
+
+def plot_training_curves(training_stats: Dict[str, Any], save_path: Optional[str] = None):
+    """
+    Plot training curves for an agent.
+    
+    Args:
+        training_stats: Dictionary containing training statistics
+        save_path: Path to save the plot (optional)
+    """
+    fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+    fig.suptitle('Training Curves', fontsize=16, fontweight='bold')
+    
+    # Extract data
+    episode_rewards = training_stats.get('episode_rewards', [])
+    episode_lengths = training_stats.get('episode_lengths', [])
+    vfe_history = training_stats.get('vfe_history', [])
+    efe_history = training_stats.get('efe_history', [])
+    belief_entropy_history = training_stats.get('belief_entropy_history', [])
+    action_entropy_history = training_stats.get('action_entropy_history', [])
+    
+    # 1. Episode Rewards
+    if episode_rewards:
+        axes[0, 0].plot(episode_rewards, alpha=0.6, color='blue', label='Episode Reward')
+        
+        # Add moving average
+        window = min(50, len(episode_rewards) // 10)
+        if len(episode_rewards) >= window:
+            moving_avg = np.convolve(episode_rewards, np.ones(window)/window, mode='valid')
+            axes[0, 0].plot(range(window-1, len(episode_rewards)), moving_avg, 
+                           color='red', linewidth=2, label=f'{window}-episode moving average')
+        
+        axes[0, 0].set_title('Episode Rewards')
+        axes[0, 0].set_xlabel('Episode')
+        axes[0, 0].set_ylabel('Reward')
+        axes[0, 0].grid(True, alpha=0.3)
+        axes[0, 0].legend()
+    else:
+        axes[0, 0].text(0.5, 0.5, 'No reward data available', 
+                       ha='center', va='center', transform=axes[0, 0].transAxes)
+        axes[0, 0].set_title('Episode Rewards')
+    
+    # 2. Episode Lengths
+    if episode_lengths:
+        axes[0, 1].plot(episode_lengths, alpha=0.6, color='green', label='Episode Length')
+        axes[0, 1].axhline(y=195, color='red', linestyle='--', alpha=0.7, label='Success threshold')
+        
+        # Add moving average
+        if len(episode_lengths) >= window:
+            length_moving_avg = np.convolve(episode_lengths, np.ones(window)/window, mode='valid')
+            axes[0, 1].plot(range(window-1, len(episode_lengths)), length_moving_avg, 
+                           color='red', linewidth=2, label=f'{window}-episode moving average')
+        
+        axes[0, 1].set_title('Episode Lengths')
+        axes[0, 1].set_xlabel('Episode')
+        axes[0, 1].set_ylabel('Length')
+        axes[0, 1].grid(True, alpha=0.3)
+        axes[0, 1].legend()
+    else:
+        axes[0, 1].text(0.5, 0.5, 'No length data available', 
+                       ha='center', va='center', transform=axes[0, 1].transAxes)
+        axes[0, 1].set_title('Episode Lengths')
+    
+    # 3. Free Energy (VFE and EFE)
+    if vfe_history or efe_history:
+        if vfe_history:
+            axes[1, 0].plot(vfe_history, alpha=0.6, color='purple', label='Variational Free Energy')
+        if efe_history:
+            axes[1, 0].plot(efe_history, alpha=0.6, color='orange', label='Expected Free Energy')
+        
+        axes[1, 0].set_title('Free Energy Evolution')
+        axes[1, 0].set_xlabel('Step')
+        axes[1, 0].set_ylabel('Free Energy')
+        axes[1, 0].grid(True, alpha=0.3)
+        axes[1, 0].legend()
+    else:
+        axes[1, 0].text(0.5, 0.5, 'No free energy data available', 
+                       ha='center', va='center', transform=axes[1, 0].transAxes)
+        axes[1, 0].set_title('Free Energy Evolution')
+    
+    # 4. Entropy Analysis
+    if belief_entropy_history or action_entropy_history:
+        if belief_entropy_history:
+            axes[1, 1].plot(belief_entropy_history, alpha=0.6, color='cyan', label='Belief Entropy')
+        if action_entropy_history:
+            axes[1, 1].plot(action_entropy_history, alpha=0.6, color='magenta', label='Action Entropy')
+        
+        axes[1, 1].set_title('Entropy Analysis')
+        axes[1, 1].set_xlabel('Step')
+        axes[1, 1].set_ylabel('Entropy')
+        axes[1, 1].grid(True, alpha=0.3)
+        axes[1, 1].legend()
+    else:
+        axes[1, 1].text(0.5, 0.5, 'No entropy data available', 
+                       ha='center', va='center', transform=axes[1, 1].transAxes)
+        axes[1, 1].set_title('Entropy Analysis')
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Training curves saved to {save_path}")
+    
+    plt.show()
+
+
+def plot_agent_comparison(agent_results: Dict[str, Dict[str, Any]], save_path: Optional[str] = None):
+    """
+    Create comparison plots for multiple agents.
+    
+    Args:
+        agent_results: Dictionary with agent names as keys and results as values
+        save_path: Path to save the plots (optional)
+    """
+    create_agent_comparison_plots(agent_results, save_path) 

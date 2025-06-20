@@ -341,4 +341,154 @@ def create_experiment_report(experiment_dir: str, output_file: str = None) -> st
             f.write(f"- **Total Steps:** {agent_results.get('total_steps', 0)}\n\n")
     
     print(f"Experiment report saved to {output_file}")
-    return output_file 
+    return output_file
+
+
+class DataLogger:
+    """
+    Structured data logger for experiments.
+    """
+    
+    def __init__(self, log_dir: str):
+        """
+        Initialize the data logger.
+        
+        Args:
+            log_dir: Directory to save logs
+        """
+        self.log_dir = log_dir
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        
+        # Initialize metrics storage
+        self.metrics = {
+            'episode_rewards': [],
+            'episode_lengths': [],
+            'training_losses': [],
+            'belief_entropies': [],
+            'free_energies': [],
+            'action_entropies': [],
+            'temperatures': []
+        }
+        
+        # Create timestamp for this experiment
+        self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.experiment_dir = os.path.join(log_dir, f"experiment_{self.timestamp}")
+        os.makedirs(self.experiment_dir, exist_ok=True)
+    
+    def log_metrics(self, metrics_dict: Dict[str, Any]):
+        """
+        Log a dictionary of metrics.
+        
+        Args:
+            metrics_dict: Dictionary containing metrics to log
+        """
+        for key, value in metrics_dict.items():
+            if key in self.metrics:
+                if isinstance(value, (list, np.ndarray)):
+                    self.metrics[key].extend(value)
+                else:
+                    self.metrics[key].append(value)
+            else:
+                # Store single values in a new list
+                if key not in self.metrics:
+                    self.metrics[key] = []
+                self.metrics[key].append(value)
+    
+    def log_episode(self, episode: int, reward: float, length: int, **kwargs):
+        """
+        Log episode-level metrics.
+        
+        Args:
+            episode: Episode number
+            reward: Episode reward
+            length: Episode length
+            **kwargs: Additional episode metrics
+        """
+        episode_data = {
+            'episode': episode,
+            'reward': reward,
+            'length': length,
+            **kwargs
+        }
+        
+        self.metrics['episode_rewards'].append(reward)
+        self.metrics['episode_lengths'].append(length)
+        
+        # Log to CSV
+        csv_file = os.path.join(self.experiment_dir, "episode_metrics.csv")
+        file_exists = os.path.exists(csv_file)
+        
+        with open(csv_file, 'a', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=episode_data.keys())
+            if not file_exists:
+                writer.writeheader()
+            writer.writerow(episode_data)
+    
+    def save_summary(self, agent_name: str = "agent"):
+        """
+        Save a summary of all logged metrics.
+        
+        Args:
+            agent_name: Name of the agent
+        """
+        summary = {
+            'agent_name': agent_name,
+            'timestamp': self.timestamp,
+            'num_episodes': len(self.metrics['episode_rewards']),
+            'total_steps': sum(self.metrics['episode_lengths']),
+            'average_reward': np.mean(self.metrics['episode_rewards']) if self.metrics['episode_rewards'] else 0,
+            'std_reward': np.std(self.metrics['episode_rewards']) if self.metrics['episode_rewards'] else 0,
+            'min_reward': np.min(self.metrics['episode_rewards']) if self.metrics['episode_rewards'] else 0,
+            'max_reward': np.max(self.metrics['episode_rewards']) if self.metrics['episode_rewards'] else 0,
+            'average_length': np.mean(self.metrics['episode_lengths']) if self.metrics['episode_lengths'] else 0,
+            'success_rate': sum(1 for length in self.metrics['episode_lengths'] if length >= 195) / len(self.metrics['episode_lengths']) if self.metrics['episode_lengths'] else 0
+        }
+        
+        # Add training-specific metrics if available
+        if self.metrics['training_losses']:
+            summary.update({
+                'average_loss': np.mean(self.metrics['training_losses']),
+                'final_loss': self.metrics['training_losses'][-1] if self.metrics['training_losses'] else None
+            })
+        
+        if self.metrics['belief_entropies']:
+            summary.update({
+                'average_belief_entropy': np.mean(self.metrics['belief_entropies']),
+                'final_belief_entropy': self.metrics['belief_entropies'][-1] if self.metrics['belief_entropies'] else None
+            })
+        
+        if self.metrics['free_energies']:
+            summary.update({
+                'average_free_energy': np.mean(self.metrics['free_energies']),
+                'final_free_energy': self.metrics['free_energies'][-1] if self.metrics['free_energies'] else None
+            })
+        
+        if self.metrics['temperatures']:
+            summary.update({
+                'final_temperature': self.metrics['temperatures'][-1] if self.metrics['temperatures'] else None
+            })
+        
+        # Save summary
+        summary_file = os.path.join(self.experiment_dir, f"{agent_name}_summary.json")
+        with open(summary_file, 'w') as f:
+            json.dump(summary, f, indent=2)
+        
+        # Save all metrics
+        metrics_file = os.path.join(self.experiment_dir, f"{agent_name}_metrics.json")
+        with open(metrics_file, 'w') as f:
+            json.dump(self.metrics, f, indent=2, default=lambda x: x.tolist() if isinstance(x, np.ndarray) else x)
+        
+        print(f"Summary saved to {summary_file}")
+        print(f"Metrics saved to {metrics_file}")
+        
+        return summary
+    
+    def get_experiment_dir(self) -> str:
+        """
+        Get the experiment directory path.
+        
+        Returns:
+            Path to the experiment directory
+        """
+        return self.experiment_dir 

@@ -29,6 +29,7 @@ class CartPoleEnv(EnvironmentWrapper):
             config = EnvironmentConfig(env_type='cartpole')
         
         super().__init__(config)
+        self.partial_observability = self.config.cartpole_config.partial_observability
     
     def _initialize_environment(self):
         """Initialize the CartPole environment."""
@@ -43,6 +44,28 @@ class CartPoleEnv(EnvironmentWrapper):
         # Set the seed for reproducibility
         if seed is not None:
             self.env.reset(seed=seed)
+    
+    def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
+        """Take a step in the environment."""
+        observation, reward, terminated, truncated, info = self.env.step(action)
+        
+        if self.partial_observability:
+            # Return only position and angle
+            partial_obs = np.array([observation[0], observation[2]])
+            return partial_obs, reward, terminated, truncated, info
+            
+        return observation, reward, terminated, truncated, info
+
+    def reset(self, seed: Optional[int] = None, options: Optional[Dict] = None) -> Tuple[np.ndarray, Dict[str, Any]]:
+        """Reset the environment."""
+        observation, info = self.env.reset(seed=seed, options=options)
+        
+        if self.partial_observability:
+            # Return only position and angle
+            partial_obs = np.array([observation[0], observation[2]])
+            return partial_obs, info
+            
+        return observation, info
     
     def _shape_reward(self, observation: np.ndarray, reward: float) -> float:
         """
@@ -214,9 +237,11 @@ class CartPoleEnv(EnvironmentWrapper):
         """
         return {
             'environment_name': 'CartPole-v1',
-            'state_dimension': 4,
+            'state_dimension': 4, # Full state dimension
+            'observation_dimension': 2 if self.partial_observability else 4,
             'action_dimension': 2,
             'state_components': ['cart_position', 'cart_velocity', 'pole_angle', 'pole_angular_velocity'],
+            'observation_components': ['cart_position', 'pole_angle'] if self.partial_observability else ['cart_position', 'cart_velocity', 'pole_angle', 'pole_angular_velocity'],
             'actions': ['left', 'right'],
             'success_threshold': self.get_success_threshold(),
             'max_steps': self.config.get_config().get('max_steps', 500),
@@ -227,34 +252,30 @@ class CartPoleEnv(EnvironmentWrapper):
 
 
 # Convenience function for creating CartPole environment
-def create_cartpole_env(
-    normalize_states: bool = True,
-    reward_shaping: bool = False,
-    render_mode: Optional[str] = None,
-    seed: int = 42
-) -> CartPoleEnv:
+def create_cartpole_env(config: Optional[CartPoleConfig] = None, **kwargs) -> CartPoleEnv:
     """
     Create a CartPole environment with specified settings.
     
     Args:
-        normalize_states: Whether to normalize states
-        reward_shaping: Whether to apply reward shaping
-        render_mode: Rendering mode
-        seed: Random seed
+        config: A CartPoleConfig object.
+        **kwargs: Overrides for config (e.g., render_mode, seed).
         
     Returns:
         CartPole environment wrapper
     """
-    cartpole_config = CartPoleConfig(
-        normalize_states=normalize_states,
-        reward_shaping=reward_shaping
-    )
-    
+    if config is None:
+        config = CartPoleConfig()
+
+    # Apply kwargs to config
+    for key, value in kwargs.items():
+        if hasattr(config, key):
+            setattr(config, key, value)
+            
     env_config = EnvironmentConfig(
         env_type='cartpole',
-        cartpole_config=cartpole_config,
-        render_mode=render_mode,
-        seed=seed
+        cartpole_config=config,
+        render_mode=kwargs.get('render_mode'),
+        seed=kwargs.get('seed', 42)
     )
     
     return CartPoleEnv(env_config) 

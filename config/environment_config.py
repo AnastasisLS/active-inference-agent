@@ -32,6 +32,9 @@ class CartPoleConfig:
     state_mean: Optional[np.ndarray] = None
     state_std: Optional[np.ndarray] = None
     
+    # Partial observability
+    partial_observability: bool = True
+    
     # Reward shaping
     reward_shaping: bool = False
     reward_scale: float = 1.0
